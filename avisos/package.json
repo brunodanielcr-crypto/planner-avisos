@@ -1,0 +1,11 @@
+{
+  "name": "planner-avisos",
+  "private": true,
+  "version": "3.0.0",
+  "description": "Envia os avisos do Planner da Família como notificação no celular",
+  "main": "enviar-avisos.js",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
