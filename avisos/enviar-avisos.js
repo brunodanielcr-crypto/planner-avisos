@@ -70,7 +70,7 @@ async function main() {
   let sa; try { sa = JSON.parse(raw); } catch (e) { throw new Error('O segredo FIREBASE_SERVICE_ACCOUNT não é um JSON válido. Cole o arquivo .json inteiro, do { até o }.'); }
   admin.initializeApp({ credential: admin.credential.cert(sa) });
   const db = admin.firestore();
-  console.log('Projeto:', sa.project_id);
+  console.log('Conectado ao Firebase.');
 
   const now = Date.now();
   const sisRef = db.doc('sistema/avisos');
@@ -95,7 +95,8 @@ async function main() {
       if (x.teste && x.teste > (x.testeEnviado || 0)) testes.push({ ref: d.ref, token: x.token, u });
     });
   }
-  console.log('Aparelhos cadastrados:', uids.map(u => ((cfg.pessoas[u] || {}).nome || u) + ': ' + tokens[u].length).join(', ') || 'nenhum');
+  // o registro do GitHub é público em repositório público: só números, nunca nomes ou títulos
+  console.log('Pessoas na família:', uids.length, '| aparelhos cadastrados:', uids.map(u => tokens[u].length).join(' + ') || '0');
 
   async function enviar(lista, data) {
     if (!lista.length) return 0;
@@ -107,7 +108,7 @@ async function main() {
     res.responses.forEach((r, i) => {
       if (r.success) return;
       const c = r.error && r.error.code;
-      console.log('Falha no envio para um aparelho:', c, r.error && r.error.message);
+      console.log('Falha no envio para um aparelho:', c);
       if (c === 'messaging/registration-token-not-registered' || c === 'messaging/invalid-registration-token' || c === 'messaging/invalid-argument')
         lista[i].ref.delete().catch(() => {});
     });
@@ -127,14 +128,14 @@ async function main() {
     (await db.collection('users').doc(u).collection('itens').where('temAviso', '==', true).get()).forEach(d => itens.push({ ...d.data(), id: d.id, _dest: u }));
   }
   const avisos = alertsBetween(itens, de, ate);
-  console.log(`Janela ${new Date(de).toLocaleString('pt-BR')} → ${new Date(ate).toLocaleString('pt-BR')}: ${itens.length} itens com aviso, ${avisos.length} para enviar.`);
+  console.log(`${itens.length} itens com aviso, ${avisos.length} para enviar agora.`);
 
   for (const al of avisos) {
     // marca como enviado; se já existe, outra rodada já mandou
     try { await db.collection('enviados').doc(al.k.replace(/\//g, '_')).create({ em: now }); } catch (e) { continue; }
     const dest = al.it._dest === 'todos' ? uids : [al.it._dest];
     const lista = dest.flatMap(u => tokens[u] || []);
-    if (!lista.length) { console.log('Sem aparelho cadastrado para', al.it.titulo); continue; }
+    if (!lista.length) { console.log('Um aviso ficou sem aparelho cadastrado para receber.'); continue; }
     const area = AREAS[al.it.area] || AREAS.familiar;
     const body = [quando(al, now), al.it.local, al.it.cat].filter(Boolean).join(' · ');
     const n = await enviar(lista, {
@@ -144,7 +145,7 @@ async function main() {
       tag: al.k,
       tarefa: al.it.tipo === 'tarefa' ? '1' : '0'
     });
-    console.log(`Enviado: "${al.it.titulo}" (${al.m} min antes) para ${n}/${lista.length} aparelho(s).`);
+    console.log(`Aviso enviado para ${n} de ${lista.length} aparelho(s).`);
   }
 
   await sisRef.set({ ultimo: now }, { merge: true });
